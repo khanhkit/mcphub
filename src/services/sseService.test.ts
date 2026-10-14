@@ -156,7 +156,7 @@ type MockResponse = Response & {
   headersStore: Record<string, string>;
 };
 
-const EXPECTED_METADATA_URL = 'http://localhost:3000/.well-known/oauth-protected-resource/test';
+const EXPECTED_METADATA_URL = 'http://localhost:3000/.well-known/oauth-protected-resource/test/sse';
 
 // Create mock instances for testing
 const mockStreamableHTTPServerTransport = {
@@ -272,6 +272,55 @@ describe('sseService', () => {
       await handleSseConnection(req, res);
 
       expectBearerUnauthorized(res, 'No authorization provided');
+    });
+
+    it.each([
+      ['/test/mcp', 'https://public.example/.well-known/oauth-protected-resource/hub/mcp'],
+      [
+        '/test/mcp/team?ignored=true',
+        'https://public.example/.well-known/oauth-protected-resource/hub/mcp/team',
+      ],
+      [
+        '/test/alice/mcp/team',
+        'https://public.example/.well-known/oauth-protected-resource/hub/alice/mcp/team',
+      ],
+    ])('advertises path-aware metadata for protected resource %s', async (originalUrl, metadataUrl) => {
+      setMockSystemConfig({
+        install: { baseUrl: 'https://public.example/hub' },
+      } as any);
+      const req = createMockRequest({ originalUrl });
+      const res = createMockResponse();
+
+      await handleMcpOtherRequest(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ resource_metadata: metadataUrl }),
+      );
+      expect(res.headersStore['WWW-Authenticate']).toContain(
+        `resource_metadata="${metadataUrl}"`,
+      );
+    });
+
+    it('uses the Express-resolved public origin without directly trusting forwarded host headers', async () => {
+      const req = createMockRequest({
+        originalUrl: '/test/mcp/team',
+        protocol: 'https',
+        headers: {
+          host: 'edge.example',
+          'x-forwarded-host': 'attacker.example',
+        },
+      });
+      const res = createMockResponse();
+
+      await handleMcpOtherRequest(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resource_metadata:
+            'https://edge.example/.well-known/oauth-protected-resource/test/mcp/team',
+        }),
+      );
     });
 
     it('should pass when bearer auth is disabled', async () => {

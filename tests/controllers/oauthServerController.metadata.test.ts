@@ -127,6 +127,74 @@ describe('oauthServerController metadata endpoints', () => {
     });
   });
 
+  it('returns exact path-aware metadata for a protected MCP resource behind a public prefix', async () => {
+    getSystemConfigMock.mockResolvedValue({
+      install: {
+        baseUrl: 'https://mcp.example.com/hub',
+      },
+      oauthServer: {
+        enabled: true,
+        allowedScopes: ['read'],
+      },
+    });
+    mockRequest = {
+      ...mockRequest,
+      path: '/.well-known/oauth-protected-resource/hub/mcp/team',
+      originalUrl: '/.well-known/oauth-protected-resource/hub/mcp/team',
+      params: { resourcePath: 'hub/mcp/team' },
+    };
+
+    await getProtectedResourceMetadata(mockRequest as Request, mockResponse as Response);
+
+    expect(mockStatus).not.toHaveBeenCalled();
+    expect(mockJson).toHaveBeenCalledWith({
+      resource: 'https://mcp.example.com/hub/mcp/team',
+      authorization_servers: ['https://mcp.example.com/hub'],
+      scopes_supported: ['read'],
+      bearer_methods_supported: ['header'],
+    });
+  });
+
+  it('rejects metadata suffixes that do not identify an MCPHub protected transport resource', async () => {
+    getSystemConfigMock.mockResolvedValue({
+      install: {
+        baseUrl: 'https://mcp.example.com/hub',
+      },
+      oauthServer: { enabled: true },
+    });
+    mockRequest = {
+      ...mockRequest,
+      path: '/.well-known/oauth-protected-resource/hub/api/settings',
+      originalUrl: '/.well-known/oauth-protected-resource/hub/api/settings',
+      params: { resourcePath: 'hub/api/settings' },
+    };
+
+    await getProtectedResourceMetadata(mockRequest as Request, mockResponse as Response);
+
+    expect(mockStatus).toHaveBeenCalledWith(404);
+    expect(mockJson).toHaveBeenCalledWith({ error: 'Protected resource not found' });
+  });
+
+  it('rejects path-aware metadata outside the configured public base prefix', async () => {
+    getSystemConfigMock.mockResolvedValue({
+      install: {
+        baseUrl: 'https://mcp.example.com/hub',
+      },
+      oauthServer: { enabled: true },
+    });
+    mockRequest = {
+      ...mockRequest,
+      path: '/.well-known/oauth-protected-resource/evil/mcp',
+      originalUrl: '/.well-known/oauth-protected-resource/evil/mcp',
+      params: { resourcePath: 'evil/mcp' },
+    };
+
+    await getProtectedResourceMetadata(mockRequest as Request, mockResponse as Response);
+
+    expect(mockStatus).toHaveBeenCalledWith(404);
+    expect(mockJson).toHaveBeenCalledWith({ error: 'Protected resource not found' });
+  });
+
   it('uses INSTALL_BASE_URL when returning protected resource metadata without install.baseUrl', async () => {
     process.env.INSTALL_BASE_URL = 'https://env.example.com/mcphub';
     getSystemConfigMock.mockResolvedValue({

@@ -326,6 +326,16 @@ describe('initRoutes authenticated API rate limiting', () => {
     expect(routerContainsRoute(protectedRouter!, 'delete', '/oauth/clients/:clientId')).toBe(true);
   });
 
+  it('mounts RFC 9728 protected-resource metadata for path-based resources', async () => {
+    const app = express();
+
+    await initRoutes(app);
+
+    expect(
+      findAppRoute(app, 'get', '/.well-known/oauth-protected-resource/:resourcePath(*)'),
+    ).toBeDefined();
+  });
+
   it('gates MCPB upload behind the admin middleware before multer stages the body', async () => {
     const app = express();
 

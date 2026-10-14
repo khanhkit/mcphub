@@ -246,6 +246,11 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
     mcpConnectionRateLimiter,
     getProtectedResourceMetadata,
   ); // Public protected resource metadata
+  app.get(
+    '/.well-known/oauth-protected-resource/:resourcePath(*)',
+    mcpConnectionRateLimiter,
+    getProtectedResourceMetadata,
+  ); // RFC 9728 path-aware protected resource metadata
 
   // RFC 7591 Dynamic Client Registration endpoints (public for registration)
   app.post('/oauth/register', mcpConnectionRateLimiter, registerClient); // Register new OAuth client
